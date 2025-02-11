@@ -61,8 +61,7 @@ class Test {
     name = '%%NAME%%'
     callback
     status = 'pending'
-    startTime = 0
-    endTime = 0
+    duration
 
     elements = {
         statusDisplay: dm('span', { class: 'test-status-display' }, '%%STATUS%%'),
@@ -95,12 +94,11 @@ class Test {
 
         this.elements.nameDisplay.textContent = this.name
 
-        const startTime = this.startTime
-        const endTime = this.endTime
-        this.elements.timeDisplay.textContent = endTime !== 0 ? ` (${endTime - startTime}ms)` : ' (?ms)'
+        this.elements.timeDisplay.textContent = ` (${this.duration ?? '?'}ms)`
     }
 
     async run() {
+        const startTime = window.performance.now()
         try {
             await this.callback()
             console.debug(`✅ ${this.name}`)
@@ -111,7 +109,8 @@ class Test {
             console.error(error)
             this.status = 'failed'
         }
-        this.endTime = window.performance.now()
+        const endTime = window.performance.now()
+        this.duration = endTime - startTime
         this.updateElement()
     }
 }

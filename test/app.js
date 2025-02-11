@@ -18,5 +18,5 @@ test('Lazy guy', async () => {
 })
 
 test('Meant to fail', () => {
-    expect(sum(2, 2)).toBe(5)
+    expect(true).toBe(false)
 })
