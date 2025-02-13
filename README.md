@@ -1,7 +1,2 @@
 # test
-
-Every test has:
--A name
--A callback
--A status
--A DOM element
+A tool for testing vanilla browser Javascript without needing NPM
