@@ -62,11 +62,13 @@ class Test {
     callback
     status = 'pending'
     duration
+    errorMessage = ''
 
     elements = {
         statusDisplay: dm('span', { class: 'test-status-display' }, '%%STATUS%%'),
         nameDisplay: dm('span', { class: 'test-name-display' }, this.name),
-        timeDisplay: dm('span', { class: 'test-time-display' }, '0ms')
+        timeDisplay: dm('span', { class: 'test-time-display' }, '0ms'),
+        errorDisplay: dm('p', { class: 'test-error-display' }, this.errorMessage),
     }
 
     constructor(name, callback) {
@@ -77,11 +79,14 @@ class Test {
     getElement() {
         this.updateElement()
 
-        return dm('p', { class: `test` },
-            this.elements.statusDisplay,
-            ' ',
-            this.elements.nameDisplay,
-            this.elements.timeDisplay,
+        return dm('div', { class: 'test' },
+            dm('p', {},
+                this.elements.statusDisplay,
+                ' ',
+                this.elements.nameDisplay,
+                this.elements.timeDisplay,
+            ),
+            this.elements.errorDisplay
         )
     }
 
@@ -95,6 +100,8 @@ class Test {
         this.elements.nameDisplay.textContent = this.name
 
         this.elements.timeDisplay.textContent = ` (${this.duration ?? '?'}ms)`
+
+        this.elements.errorDisplay.textContent = this.errorMessage
     }
 
     async run() {
@@ -107,6 +114,7 @@ class Test {
         } catch (error) {
             console.debug(`❌ ${this.name}`)
             console.error(error)
+            this.errorMessage = error.message
             this.status = 'failed'
         }
         const endTime = window.performance.now()
