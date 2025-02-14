@@ -16,18 +16,15 @@ function dm(tag, attributes = {}, ...children) {
     return element
 }
 
-class TestSuite {
-    static debounceTime = 100  // ms
-
-    tests = []
-    debounceTimer = null
-
+const testSuite = {
+    debounceTime: 100,  // ms
+    tests: [],
+    debounceTimer: null,
     addTest(name, callback) {
         const newTest = new Test(name, callback)
         document.body.appendChild(newTest.getElement())
         this.tests.push(newTest)
-    }
-
+    },
     tryToRunTests() {
         if (this.debounceTimer) {
             clearTimeout(this.debounceTimer)
@@ -35,12 +32,16 @@ class TestSuite {
 
         this.debounceTimer = setTimeout(() => {
             this.runTests()
-        }, TestSuite.debounceTime)
-    }
-
+        }, this.debounceTime)
+    },
     async runTests() {
         const startTime = window.performance.now()
-        await Promise.all(this.tests.map(test => test.run()))
+
+        // Run sequentially so globally shared state can be tested
+        for (const test of this.tests) {
+            await test.run()
+        }
+
         const endTime = window.performance.now()
 
         const numberOfTests = this.tests.length
@@ -54,13 +55,15 @@ class TestSuite {
         )
 
         document.body.appendChild(resultsDiv)
+
+        window.scrollTo(0, document.body.scrollHeight)
     }
 }
 
 class Test {
     name = '%%NAME%%'
     callback
-    status = 'pending'
+    status = ''
     duration
     errorMessage = ''
 
@@ -105,6 +108,8 @@ class Test {
     }
 
     async run() {
+        this.status = 'pending'
+        this.updateElement()
         const startTime = window.performance.now()
         try {
             await this.callback()
@@ -123,8 +128,6 @@ class Test {
     }
 }
 
-const testSuite = new TestSuite()
-
 export function test(name, callback) {
     testSuite.addTest(name, callback)
     testSuite.tryToRunTests()
@@ -134,15 +137,63 @@ export function expect(actual) {
     return {
         toBe(expected) {
             if (actual !== expected) {
-                throw new Error(`${actual} is not equal to ${expected}`)
+                throw new Error(`Expected ${actual} to be ${expected}.`)
+            }
+        },
+        toStrictEqual(expected) {
+            const actualStr = JSON.stringify(actual)
+            const expectedStr = JSON.stringify(expected)
+            if (actualStr !== expectedStr) {
+                throw new Error(
+                    `Expected ${actualStr} to strictly equal ${expectedStr}.`,
+                )
+            }
+        },
+        toThrow() {
+            let threw = false
+            try {
+                if (typeof actual === 'function') {
+                    actual()
+                } else {
+                    throw new Error('toThrow requires the actual value to be a function.')
+                }
+            } catch {
+                threw = true
+            }
+            if (!threw) {
+                throw new Error('Expected function to throw, but it did not.')
             }
         },
         not: {
             toBe(expected) {
                 if (actual === expected) {
-                    throw new Error(`${actual} is equal to ${expected}`)
+                    throw new Error(`Expected ${actual} not to be ${expected}.`)
                 }
-            }
-        }
+            },
+            toStrictEqual(expected) {
+                const actualStr = JSON.stringify(actual)
+                const expectedStr = JSON.stringify(expected)
+                if (actualStr === expectedStr) {
+                    throw new Error(
+                        `Expected ${actualStr} not to strictly equal ${expectedStr}.`,
+                    )
+                }
+            },
+            toThrow() {
+                let threw = false
+                try {
+                    if (typeof actual === 'function') {
+                        actual()
+                    } else {
+                        throw new Error('toThrow requires the actual value to be a function.')
+                    }
+                } catch {
+                    threw = true
+                }
+                if (threw) {
+                    throw new Error('Expected function not to throw, but it did.')
+                }
+            },
+        },
     }
 }
