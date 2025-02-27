@@ -17,16 +17,28 @@ function dm(tag, attributes = {}, ...children) {
 }
 
 class Expectation {
+    /**
+     * Stores the value to be tested
+     * @param {any} value
+     */
     constructor(value) {
         this.value = value
     }
 
+    /**
+     * Throws an error if the value is not equal to the expected value
+     * @param {any} expected
+     */
     toBe(expected) {
         if (this.value !== expected) {
             throw new Error(`${this.value} is not equal to ${expected}`)
         }
     }
 
+    /**
+     * Throws an error if the value is not equal to the expected value
+     * @param {any} expected
+     */
     toEqual(expected) {
         const valueJson = JSON.stringify(this.value)
         const expectedJson = JSON.stringify(expected)
@@ -49,7 +61,7 @@ class Expectation {
             if (valueJson === expectedJson) {
                 throw new Error(`${valueJson} is equal to ${expectedJson}`)
             }
-        }
+        },
     }
 }
 
@@ -81,19 +93,13 @@ class Test {
 
         this.status = Test.statusEnum.initial
 
-        document.body.appendChild(
-            dm('div', { class: 'test' },
-                dm('p', {},
-                    this.elements.statusSpan,
-                    ' ',
-                    dm('span', { class: 'test-name' }, name),
-                    ' (',
-                    this.elements.durationSpan,
-                    ')'
-                ),
-                this.elements.errorDisplay
-            )
-        )
+        const { statusSpan, durationSpan, errorDisplay } = this.elements
+        const nameSpan = dm('span', { class: 'test-name' }, name)
+
+        const testParagraph = dm('p', {}, statusSpan, ' ', nameSpan, ' (', durationSpan, ')')
+        const testDiv = dm('div', { class: 'test' }, testParagraph, errorDisplay)
+
+        document.body.appendChild(testDiv)
     }
 
     get status() {
@@ -103,33 +109,36 @@ class Test {
     set status(value) {
         this.#status = value
 
+        const { initial, pending, passed, failed, skipped, timeout } = Test.statusEnum
+        const { statusSpan } = this.elements
+
         switch (value) {
-            case Test.statusEnum.initial:
-                this.elements.statusSpan.innerText = 'Initial'
-                this.elements.statusSpan.className = 'test-status initial'
-            case Test.statusEnum.pending:
-                this.elements.statusSpan.innerText = 'Pending'
-                this.elements.statusSpan.className = 'test-status pending'
+            case initial:
+                statusSpan.innerText = 'Initial'
+                statusSpan.className = 'test-status initial'
+            case pending:
+                statusSpan.innerText = 'Pending'
+                statusSpan.className = 'test-status pending'
                 break
-            case Test.statusEnum.passed:
-                this.elements.statusSpan.innerText = 'Passed'
-                this.elements.statusSpan.className = 'test-status passed'
+            case passed:
+                statusSpan.innerText = 'Passed'
+                statusSpan.className = 'test-status passed'
                 break
-            case Test.statusEnum.failed:
-                this.elements.statusSpan.innerText = 'Failed'
-                this.elements.statusSpan.className = 'test-status failed'
+            case failed:
+                statusSpan.innerText = 'Failed'
+                statusSpan.className = 'test-status failed'
                 break
-            case Test.statusEnum.skipped:
-                this.elements.statusSpan.innerText = 'Skipped'
-                this.elements.statusSpan.className = 'test-status skipped'
+            case skipped:
+                statusSpan.innerText = 'Skipped'
+                statusSpan.className = 'test-status skipped'
                 break
-            case Test.statusEnum.timeout:
-                this.elements.statusSpan.innerText = 'Timeout'
-                this.elements.statusSpan.className = 'test-status timeout'
+            case timeout:
+                statusSpan.innerText = 'Timeout'
+                statusSpan.className = 'test-status timeout'
                 break
             default:
-                this.elements.statusSpan.innerText = 'Unknown'
-                this.elements.statusSpan.className = 'test-status unknown'
+                statusSpan.innerText = 'Unknown'
+                statusSpan.className = 'test-status unknown'
                 break
         }
     }
@@ -193,7 +202,7 @@ export class Suite {
 
 class TestRunner {
     static debounceTimeMs = 50
-    debounceTimeout = null
+    debounceTimeout = 0
     testsAndSuites = []
 
     run() {
@@ -227,5 +236,20 @@ class TestRunner {
 
 const testRunner = new TestRunner()
 
-export const test = (name, func) => testRunner.makeTest(name, func)
-export const describe = (name, func) => testRunner.makeSuite(name, func)
+/**
+ * Creates a test that will run the given function
+ * @param {string} name
+ * @param {function(function(any): Expectation): void} func
+ */
+export function test(name, func) {
+    testRunner.makeTest(name, func)
+}
+
+/**
+ *
+ * @param {string} name
+ * @param {function(test): void} func
+ */
+export function describe(name, func) {
+    testRunner.makeSuite(name, func)
+}
