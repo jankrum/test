@@ -1,33 +1,20 @@
-// function dm(tag, attributes = {}, ...children) {
-//     const element = document.createElement(tag)
+function dm(tag, attributes = {}, ...children) {
+    const element = document.createElement(tag)
 
-//     for (const [key, value] of Object.entries(attributes)) {
-//         element.setAttribute(key, value)
-//     }
+    for (const [key, value] of Object.entries(attributes)) {
+        element.setAttribute(key, value)
+    }
 
-//     for (const child of children) {
-//         if (typeof child === 'string') {
-//             element.appendChild(document.createTextNode(child))
-//         } else if (child) {
-//             element.appendChild(child)
-//         }
-//     }
+    for (const child of children) {
+        if (typeof child === 'string') {
+            element.appendChild(document.createTextNode(child))
+        } else if (child) {
+            element.appendChild(child)
+        }
+    }
 
-//     return element
-// }
-
-// export function describe(name, func) { }
-
-// export function it(name, func) {
-//     console.log(`Test: ${name}`)
-//     try {
-//         func(5)
-//         console.log(`%cSuccess: ${name}`, 'background-color: green;')
-//     } catch (error) {
-//         console.error(`Fail: ${name}\n${error.message}`)
-//     }
-// }
-
+    return element
+}
 
 class Expectation {
     constructor(value) {
@@ -67,29 +54,178 @@ class Expectation {
 }
 
 class Test {
-    constructor(name) {
-        this.name = name
+    static statusEnum = Object.freeze({
+        initial: 0,
+        pending: 1,
+        passed: 2,
+        failed: 3,
+        skipped: 4,
+        timeout: 5,
+    })
+
+    name
+    callback
+    #status
+    #durationMs
+    #errorMessage
+
+    elements = {
+        statusSpan: dm('span', { class: 'test-status' }),
+        durationSpan: dm('span', { class: 'test-duration' }),
+        errorDisplay: dm('p', { class: 'test-error' }),
     }
 
-    run(func) {
-        console.log(`Test: ${this.name}`)
-        try {
-            func()
-            console.log(`%cSuccess: ${this.name}`, 'background-color: green;')
-        } catch (error) {
-            console.error(`Fail: ${this.name}\n${error.message}`)
+    constructor(name, callback) {
+        this.name = name
+        this.callback = callback
+
+        this.status = Test.statusEnum.initial
+
+        document.body.appendChild(
+            dm('div', { class: 'test' },
+                dm('p', {},
+                    this.elements.statusSpan,
+                    ' ',
+                    dm('span', { class: 'test-name' }, name),
+                    ' (',
+                    this.elements.durationSpan,
+                    ')'
+                ),
+                this.elements.errorDisplay
+            )
+        )
+    }
+
+    get status() {
+        return this.#status
+    }
+
+    set status(value) {
+        this.#status = value
+
+        switch (value) {
+            case Test.statusEnum.initial:
+                this.elements.statusSpan.innerText = 'Initial'
+                this.elements.statusSpan.className = 'test-status initial'
+            case Test.statusEnum.pending:
+                this.elements.statusSpan.innerText = 'Pending'
+                this.elements.statusSpan.className = 'test-status pending'
+                break
+            case Test.statusEnum.passed:
+                this.elements.statusSpan.innerText = 'Passed'
+                this.elements.statusSpan.className = 'test-status passed'
+                break
+            case Test.statusEnum.failed:
+                this.elements.statusSpan.innerText = 'Failed'
+                this.elements.statusSpan.className = 'test-status failed'
+                break
+            case Test.statusEnum.skipped:
+                this.elements.statusSpan.innerText = 'Skipped'
+                this.elements.statusSpan.className = 'test-status skipped'
+                break
+            case Test.statusEnum.timeout:
+                this.elements.statusSpan.innerText = 'Timeout'
+                this.elements.statusSpan.className = 'test-status timeout'
+                break
+            default:
+                this.elements.statusSpan.innerText = 'Unknown'
+                this.elements.statusSpan.className = 'test-status unknown'
+                break
         }
+    }
+
+    get durationMs() {
+        return this.#durationMs
+    }
+
+    set durationMs(value) {
+        this.#durationMs = value
+        this.elements.durationSpan.innerText = `${value ?? '?'}ms`
+    }
+
+    get errorMessage() {
+        return this.#errorMessage
+    }
+
+    set errorMessage(value) {
+        this.#errorMessage = value
+        this.elements.errorDisplay.innerText = value
+    }
+
+    run() {
+        this.status = Test.statusEnum.pending
+        const startTimeMs = performance.now()
+        try {
+            this.callback(i => new Expectation(i))
+            this.status = Test.statusEnum.passed
+        } catch (error) {
+            this.errorMessage = error.message
+            this.status = Test.statusEnum.failed
+        }
+        const endTimeMs = performance.now()
+        this.durationMs = endTimeMs - startTimeMs
     }
 }
 
 export class Suite {
-    constructor(name) { }
+    name
+    callback
+    tests = []
 
-    run(func) {
-        func()
+    constructor(name, callback) {
+        this.name = name
+        this.callback = callback
+    }
+
+    run() {
+        const innerTest = (name, callback) => {
+            const test = new Test(name, callback)
+            this.tests.push(test)
+        }
+
+        this.callback(innerTest)
+
+        for (const test of this.tests) {
+            test.run()
+        }
     }
 }
 
-export const expect = value => new Expectation(value)
-export const test = (name, func) => new Test(name).run(func)
-export const describe = (name, func) => new Suite(name).run(func)
+class TestRunner {
+    static debounceTimeMs = 50
+    debounceTimeout = null
+    testsAndSuites = []
+
+    run() {
+        for (const testOrSuite of this.testsAndSuites) {
+            testOrSuite.run()
+        }
+    }
+
+    bounceTimer() {
+        if (this.debounceTimeout) {
+            clearTimeout(this.debounceTimeout)
+        }
+
+        this.debounceTimeout = setTimeout(() => {
+            this.run()
+        }, TestRunner.debounceTimeMs)
+    }
+
+    makeTest(name, callback) {
+        const test = new Test(name, callback)
+        this.testsAndSuites.push(test)
+        this.bounceTimer()
+    }
+
+    makeSuite(name, callback) {
+        const suite = new Suite(name, callback)
+        this.testsAndSuites.push(suite)
+        this.bounceTimer()
+    }
+}
+
+const testRunner = new TestRunner()
+
+export const test = (name, func) => testRunner.makeTest(name, func)
+export const describe = (name, func) => testRunner.makeSuite(name, func)
