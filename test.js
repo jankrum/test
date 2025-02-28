@@ -2,7 +2,7 @@
  * Creates a DOM element with the specified tag, attributes, and children.
  *
  * @param {string} tag - The type of element to create (e.g., 'div', 'span').
- * @param {Object.<string, string>} [attributes={}] - An object containing key-value pairs of attributes to set on the element.
+ * @param {Object.<any, string>} [attributes={}] - An object containing key-value pairs of attributes to set on the element.
  * @param {...(string|HTMLElement)} children - The children to append to the created element. Can be strings or DOM elements.
  * @returns {HTMLElement} The created DOM element.
  */
@@ -22,6 +22,33 @@ export default function dm(tag, attributes = {}, ...children) {
     }
 
     return element
+}
+
+/**
+ * Creates an invisible checkbox input element.
+ * Meant to be nested inside a label element.
+ *
+ * @param {boolean} on - Whether the toggle box should be checked initially.
+ * @param {boolean} disabled - Whether the toggle box should be disabled.
+ * @returns {HTMLInputElement} The created checkbox input element.
+ */
+export function makeToggleBox(on = false, disabled = false) {
+    const attributes = {
+        class: 'toggle-box',
+        style: 'display: none',
+        type: 'checkbox',
+    }
+
+    if (on) {
+        attributes.checked = 'true'
+    }
+
+    if (disabled) {
+        attributes.disabled = 'true'
+    }
+
+    const toggleBox = /** @type {HTMLInputElement} */ (dm('input', attributes))
+    return toggleBox
 }
 
 class Expectation {
@@ -74,6 +101,7 @@ class Expectation {
 }
 
 class Test {
+    /** @type {Object.<string, number>} */
     static statusEnum = Object.freeze({
         initial: 0,
         pending: 1,
@@ -85,9 +113,10 @@ class Test {
 
     name
     callback
-    #status
-    #durationMs
-    #errorMessage
+    #status = Test.statusEnum.initial
+    /** @type {number | null} */
+    #durationMs = null
+    #errorMessage = ''
 
     elements = {
         statusSpan: dm('span', { class: 'test-status' }),
@@ -95,19 +124,28 @@ class Test {
         errorDisplay: dm('p', { class: 'test-error' }),
     }
 
+    /**
+     * @param {string} name
+     * @param {function(function(any): Expectation): void} callback
+     */
     constructor(name, callback) {
         this.name = name
         this.callback = callback
 
         this.status = Test.statusEnum.initial
+    }
 
+    /**
+     * @returns {HTMLElement}
+     */
+    render() {
         const { statusSpan, durationSpan, errorDisplay } = this.elements
-        const nameSpan = dm('span', { class: 'test-name' }, name)
+        const nameSpan = dm('span', { class: 'test-name' }, this.name)
 
         const testParagraph = dm('p', {}, statusSpan, ' ', nameSpan, ' (', durationSpan, ')')
         const testDiv = dm('div', { class: 'test' }, testParagraph, errorDisplay)
 
-        document.body.appendChild(testDiv)
+        return testDiv
     }
 
     get status() {
@@ -170,14 +208,15 @@ class Test {
     }
 
     run() {
-        this.status = Test.statusEnum.pending
+        const { pending, passed, failed } = Test.statusEnum
+        this.status = pending
         const startTimeMs = performance.now()
         try {
             this.callback(i => new Expectation(i))
-            this.status = Test.statusEnum.passed
+            this.status = passed
         } catch (error) {
             this.errorMessage = error.message
-            this.status = Test.statusEnum.failed
+            this.status = failed
         }
         const endTimeMs = performance.now()
         this.durationMs = endTimeMs - startTimeMs
@@ -186,22 +225,53 @@ class Test {
 
 export class Suite {
     name
-    callback
+    /** @type {Array<Test>} */
     tests = []
 
+    /**
+     *
+     * @param {string} name
+     * @param {*} callback
+     */
     constructor(name, callback) {
         this.name = name
-        this.callback = callback
-    }
 
-    run() {
         const innerTest = (name, callback) => {
             const test = new Test(name, callback)
             this.tests.push(test)
         }
 
-        this.callback(innerTest)
+        callback(innerTest)
+    }
 
+    /**
+     * @returns {HTMLElement}
+     */
+    render() {
+        const header = dm('h2', {}, this.name)
+        const testElements = this.tests.map(test => test.render())
+        const toggleBox = makeToggleBox(true)
+        const toggleLabel = dm('label', {}, header, toggleBox)
+
+        const testDiv = dm('div', {}, ...testElements)
+
+        const changeDivStyle = () => {
+            if (toggleBox.checked) {
+                testDiv.style.display = 'block'
+            } else {
+                testDiv.style.display = 'none'
+            }
+        }
+
+        toggleBox.addEventListener('change', changeDivStyle)
+
+        changeDivStyle()
+
+        const div = dm('div', { class: 'suite' }, toggleLabel, testDiv)
+        return div
+    }
+
+    run() {
         for (const test of this.tests) {
             test.run()
         }
@@ -211,9 +281,14 @@ export class Suite {
 class TestRunner {
     static debounceTimeMs = 50
     debounceTimeout = 0
+    /** @type {Array<Test|Suite>} */
     testsAndSuites = []
 
     run() {
+        for (const testOrSuite of this.testsAndSuites) {
+            document.body.appendChild(testOrSuite.render())
+        }
+
         for (const testOrSuite of this.testsAndSuites) {
             testOrSuite.run()
         }
