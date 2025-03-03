@@ -27,8 +27,12 @@ body {
     background-color: var(--background-color);
 }
 
-label:has(input[type="checkbox"]) {
+label {
     user-select: none;
+}
+
+label:has(input[type="checkbox"]) {
+    cursor: pointer;
 }
 
 .test-status.pending {
